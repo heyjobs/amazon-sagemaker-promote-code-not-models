@@ -1,7 +1,8 @@
 # read profile-id from config-file
 config_file="profiles.conf"
 source "$config_file"
-echo "Profile-Id: $operations"
+#echo "Profile-Id: $operations"
+operations=676012288735
 echo "Profile-Name: operations"
 
 # build docker image (if running on M1/M2 --> specify platform with : --platform linux/amd64)
