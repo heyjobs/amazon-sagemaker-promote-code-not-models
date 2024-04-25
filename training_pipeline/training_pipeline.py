@@ -419,51 +419,51 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
     # Step 5: Register model
     # ======================================================
 
-    # model_metrics = ModelMetrics(
-    #     model_statistics=MetricsSource(
-    #         s3_uri=Join(on='/', values=["s3:/", bucket_param, "job-personalization/model_eval", timestamp_param, "evaluation.json"]),
-    #         content_type="application/json",
-    #     )
-    # )
+    model_metrics = ModelMetrics(
+        model_statistics=MetricsSource(
+            s3_uri=Join(on='/', values=["s3:/", bucket_param, "job-personalization/model_eval", timestamp_param, "evaluation.json"]),
+            content_type="application/json",
+        )
+    )
 
-    # register_step = RegisterModel(
-    #     name="XGBRegisterModel",
-    #     model=pipeline_model,
-    #     content_types=["text/csv"],
-    #     response_types=["text/csv"],
-    #     inference_instances=["ml.t2.medium", "ml.t2.large", "ml.t2.xlarge", "ml.m5.large", "ml.m6g.large"],
-    #     model_metrics=model_metrics,
-    #     model_package_group_name=model_package_group_name,
-    #     approval_status=model_approval_status_param,
-    # )
-    # pipeline_model.register(
-    #     content_types=["text/csv"],
-    #     response_types=["text/csv"],
-    #     inference_instances=["ml.t2.medium", "ml.t2.large", "ml.t2.xlarge", "ml.m5.large", "ml.m6g.large"],
-    #     model_package_group_name=model_package_group_name,
-    #     approval_status=model_approval_status_param, 
-    # )
+    register_step = RegisterModel(
+        name="XGBRegisterModel",
+        model=pipeline_model,
+        content_types=["text/csv"],
+        response_types=["text/csv"],
+        inference_instances=["ml.t2.medium", "ml.t2.large", "ml.t2.xlarge", "ml.m5.large", "ml.m6g.large"],
+        model_metrics=model_metrics,
+        model_package_group_name=model_package_group_name,
+        approval_status=model_approval_status_param,
+    )
+    pipeline_model.register(
+        content_types=["text/csv"],
+        response_types=["text/csv"],
+        inference_instances=["ml.t2.medium", "ml.t2.large", "ml.t2.xlarge", "ml.m5.large", "ml.m6g.large"],
+        model_package_group_name=model_package_group_name,
+        approval_status=model_approval_status_param, 
+    )
 
+    ======================================================
+    Step 6: Condition for model approval status
     # ======================================================
-    # Step 6: Condition for model approval status
-    # # ======================================================
 
-    # # Evaluate model performance on test set
-    # cond_gte = ConditionGreaterThanOrEqualTo(
-    #     left=JsonGet(
-    #         step_name=evaluation_step.name,
-    #         property_file=evaluation_report,
-    #         json_path="classification_metrics.roc_auc.value",
-    #     ),
-    #     right=0.6, # Threshold to compare model performance against
-    # )
+    # Evaluate model performance on test set
+    cond_gte = ConditionGreaterThanOrEqualTo(
+        left=JsonGet(
+            step_name=evaluation_step.name,
+            property_file=evaluation_report,
+            json_path="classification_metrics.roc_auc.value",
+        ),
+        right=0.6, # Threshold to compare model performance against
+    )
 
-    # condition_step = ConditionStep(
-    #     name="CheckPersonalizationModelXGBEvaluation",
-    #     conditions=[cond_gte],
-    #     if_steps=[register_step], 
-    #     else_steps=[]
-    # )
+    condition_step = ConditionStep(
+        name="CheckPersonalizationModelXGBEvaluation",
+        conditions=[cond_gte],
+        if_steps=[register_step], 
+        else_steps=[]
+    )
 
     # ======================================================
     # Final Step: Define Pipeline
@@ -488,7 +488,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
             process_step,
             train_step,
             evaluation_step,
-            # condition_step
+            condition_step
         ],
         sagemaker_session=sess
     )

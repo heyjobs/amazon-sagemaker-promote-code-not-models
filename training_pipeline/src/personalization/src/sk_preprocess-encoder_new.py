@@ -147,11 +147,11 @@ if __name__ == "__main__":
     raw_data_negative = "negative.csv"
     
     s3_client = boto3.client("s3")
-    bucket_name = "inventory-sls-production-two-way-dp-bridge"
+    bucket_name = "sagemaker-personalization-mlops-poc"
     latest_data = find_latest_training_data(
         s3_client,
         bucket_name=bucket_name,
-        prefix="from_dp_to_inv/inv_job_recommendations_training_data_export/search_feed"
+        prefix="search_feed"
     )
     logger.info(latest_data)
     if len(latest_data) > 0:
