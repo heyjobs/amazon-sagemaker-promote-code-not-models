@@ -6,7 +6,7 @@ operations=676012288735
 echo "Profile-Name: operations"
 
 # Login to AWS docker registry
-aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin $operations.dkr.ecr.eu-central-1.amazonaws.com
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 763104351884.dkr.ecr.eu-west-3.amazonaws.com
 
 # build docker image (if running on M1/M2 --> specify platform with : --platform linux/amd64)
 docker build -t training-image -f images/train/Dockerfile .
