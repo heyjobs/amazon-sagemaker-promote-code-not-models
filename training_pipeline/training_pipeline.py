@@ -235,7 +235,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
         name="DataProcessing",
         processor=sklearn_processor,
         inputs=[
-            ProcessingInput(source='src/personalization/src/utils/', destination="/opt/ml/processing/input/code/utils/")
+            ProcessingInput(source='src/personalization/utils/', destination="/opt/ml/processing/input/code/utils/")
         ],
         outputs=[
             ProcessingOutput(
