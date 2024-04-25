@@ -50,5 +50,5 @@ jobs:
         run: python training_pipeline.py --action create
 
       - name: Run training pipeline (only in prod)
-       working-directory: ./training_pipeline
+        working-directory: ./training_pipeline
         run: python training_pipeline.py --action run
