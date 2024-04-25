@@ -444,7 +444,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
         approval_status=model_approval_status_param, 
     )
 
-    ======================================================
+    # ======================================================
     Step 6: Condition for model approval status
     # ======================================================
 
