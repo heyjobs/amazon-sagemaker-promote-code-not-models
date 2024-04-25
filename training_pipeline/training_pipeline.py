@@ -519,7 +519,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", type=str, default=None, choices=profiles)
     parser.add_argument("--region", type=str, default="eu-west-3")
-    parser.add_argument("--pipeline-name", type=str, default="training-pipeline")
+    parser.add_argument("--pipeline-name", type=str, default="Job-Personalization-Pipeline")
     parser.add_argument("--action", type=str, choices=["create", "run"])
     args = parser.parse_args()
 
