@@ -50,6 +50,5 @@ jobs:
         run: python training_pipeline.py --action create
 
       - name: Run training pipeline (only in prod)
-       if: startsWith(github.ref, 'refs/tags/prod')
        working-directory: ./training_pipeline
         run: python training_pipeline.py --action run
