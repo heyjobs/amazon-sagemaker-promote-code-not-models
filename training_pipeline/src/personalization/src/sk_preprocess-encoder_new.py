@@ -102,8 +102,8 @@ def find_latest_training_data(s3_client, bucket_name, prefix, date_format="%Y-%m
     
     for file_path in file_list:
         parts = file_path.split("/")
-        interaction_type = parts[3]
-        date_str = parts[4].split("=")[1]
+        interaction_type = parts[1]
+        date_str = parts[2].split("=")[1]
         date = datetime.datetime.strptime(date_str, date_format)
 
         if date not in interactions[interaction_type]:
