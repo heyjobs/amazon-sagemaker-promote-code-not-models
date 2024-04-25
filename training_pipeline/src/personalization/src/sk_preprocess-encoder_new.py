@@ -157,8 +157,8 @@ if __name__ == "__main__":
     )
     logger.info(latest_data)
     if len(latest_data) > 0:
-        s3_client.download_file(bucket_name, latest_data[0], raw_data_positive)
-        s3_client.download_file(bucket_name, latest_data[1], raw_data_negative)
+        s3_client.download_file(bucket_name, "search_feed/positive_interactions/export_date=2024-04-25/export.csv000", raw_data_positive)
+        s3_client.download_file(bucket_name, "search_feed/negative_interactions/export_date=2024-04-25/export.csv000", raw_data_negative)
         logger.info("Downloaded latest data to local")
     else:
         logger.error("New data not found")
