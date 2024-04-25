@@ -11,8 +11,6 @@ from datetime import datetime
 
 from aws_profiles import UserProfiles
 
-
-
 import pandas as pd
 import json
 import boto3
