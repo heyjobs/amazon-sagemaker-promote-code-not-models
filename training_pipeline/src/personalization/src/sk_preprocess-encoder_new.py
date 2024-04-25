@@ -148,20 +148,23 @@ if __name__ == "__main__":
     raw_data_positive = "positive.csv"
     raw_data_negative = "negative.csv"
     
-    s3_client = boto3.client("s3")
-    bucket_name = "sagemaker-personalization-mlops-poc"
-    latest_data = find_latest_training_data(
-        s3_client,
-        bucket_name=bucket_name,
-        prefix="search_feed"
-    )
-    logger.info(latest_data)
-    if len(latest_data) > 0:
-        s3_client.download_file(bucket_name, "search_feed/positive_interactions/export_date=2024-04-25/export.csv000", raw_data_positive)
-        s3_client.download_file(bucket_name, "search_feed/negative_interactions/export_date=2024-04-25/export.csv000", raw_data_negative)
-        logger.info("Downloaded latest data to local")
-    else:
-        logger.error("New data not found")
+    # s3_client = boto3.client("s3")
+    # bucket_name = "sagemaker-personalization-mlops-poc"
+    # latest_data = find_latest_training_data(
+    #     s3_client,
+    #     bucket_name=bucket_name,
+    #     prefix="search_feed"
+    # )
+    # logger.info(latest_data)
+    # if len(latest_data) > 0:
+    #     s3_client.download_file(bucket_name, "search_feed/positive_interactions/export_date=2024-04-25/export.csv000", raw_data_positive)
+    #     s3_client.download_file(bucket_name, "search_feed/negative_interactions/export_date=2024-04-25/export.csv000", raw_data_negative)
+    #     logger.info("Downloaded latest data to local")
+    # else:
+    #     logger.error("New data not found")
+        
+    s3_client.download_file(bucket_name, "search_feed/positive_interactions/export_date=2024-04-25/export.csv000", raw_data_positive)
+    s3_client.download_file(bucket_name, "search_feed/negative_interactions/export_date=2024-04-25/export.csv000", raw_data_negative)
 
     logger.info("Reading data from {} & {}".format(raw_data_positive, raw_data_negative))
     negative_df = pd.read_csv(raw_data_negative)
