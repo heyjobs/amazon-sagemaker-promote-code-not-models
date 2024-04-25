@@ -442,7 +442,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
     #     inference_instances=["ml.t2.medium", "ml.t2.large", "ml.t2.xlarge", "ml.m5.large", "ml.m6g.large"],
     #     model_package_group_name=model_package_group_name,
     #     approval_status=model_approval_status_param, 
-    )
+    # )
 
     # ======================================================
     # Step 6: Condition for model approval status
