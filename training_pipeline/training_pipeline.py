@@ -235,7 +235,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
         name="DataProcessing",
         processor=sklearn_processor,
         inputs=[
-            ProcessingInput(source='personalization/src/utils/', destination="/opt/ml/processing/input/code/utils/")
+            ProcessingInput(source='src/personalization/src/utils/', destination="/opt/ml/processing/input/code/utils/")
         ],
         outputs=[
             ProcessingOutput(
@@ -267,7 +267,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
             "--include-jobseeker-uid-in-training", include_jobseeker_uid_in_training_param,
             "--include-jdp-view-as-target", include_jdp_view_as_target_param
         ],
-        code="personalization/src/sk_preprocess-encoder_new.py",
+        code="src/personalization/src/sk_preprocess-encoder_new.py",
         cache_config=cache_config
     )
     # ======================================================
@@ -334,7 +334,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
         model_data=Join(on='/', values=["s3:/", bucket_param, "job-personalization/processing_jobs", timestamp_param, "preprocess_pipeline", "preprocess_pipeline.tar.gz"]),
         role=sagemaker_role,
         sagemaker_session=sess,
-        source_dir="personalization/src/",
+        source_dir="src/personalization/src/",
         entry_point="sk_preprocess-encoder_new.py",
         framework_version="1.0-1",
     ) 
@@ -389,7 +389,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
                 destination="/opt/ml/processing/model",
             ),
             ProcessingInput(
-                source='personalization/src/utils/', 
+                source='src/personalization/src/utils/', 
                 destination="/opt/ml/processing/input/code/utils/",
             ),
             ProcessingInput(
@@ -410,7 +410,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
         job_arguments=[
             "--include-jobseeker-uid-in-training", include_jobseeker_uid_in_training_param
         ],
-        code="personalization/src/xgboost_evaluate-encoder.py",
+        code="src/personalization/src/xgboost_evaluate-encoder.py",
         property_files=[evaluation_report],
         cache_config=cache_config
     )
