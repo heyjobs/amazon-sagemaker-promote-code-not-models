@@ -84,15 +84,17 @@ from sagemaker.image_uris import retrieve
 
 
 def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline:
-    sess = (
-        boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
-    )
-    iam = sess.client("iam")
+    # sess = (
+    #     boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
+    # )
+    # iam = sess.client("iam")
+    
+    sess = sagemaker.Session()
     
     # Fetch SageMaker execution role
     # sagemaker_role = sagemaker.get_execution_role()
-    account_id = sess.client("sts").get_caller_identity().get("Account")
-    sagemaker_role = iam.get_role(RoleName=f"{account_id}-sagemaker-exec")["Role"]["Arn"]
+    # account_id = sess.client("sts").get_caller_identity().get("Account")
+    sagemaker_role = "arn:aws:iam::867640704278:role/867640704278-sagemaker-exec"
     
     
     # sagemaker_session = PipelineSession(boto_session=session)
