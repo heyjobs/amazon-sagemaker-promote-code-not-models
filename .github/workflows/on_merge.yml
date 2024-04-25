@@ -1,31 +1,31 @@
-name: Staging build pipeline
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-jobs:
-  build-staging:
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python 3.7
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.7
+# name: Staging build pipeline
+# on:
+#   push:
+#     branches:
+#       - main
+#   pull_request:
+# jobs:
+#   build-staging:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       id-token: write
+#       contents: read
+#     steps:
+#       - uses: actions/checkout@v3
+#       - name: Set up Python 3.7
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: 3.7
 
-      - name: Install dependencies
-        run: pip install -r ./training_pipeline/requirements.txt
+#       # - name: Install dependencies
+#       #   run: pip install -r ./training_pipeline/requirements.txt
 
-      - name: Login to [operations] account
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-region: eu-central-1
-          role-to-assume: arn:aws:iam::676012288735:role/676012288735-github-full-access
+#       # - name: Login to [operations] account
+#       #   uses: aws-actions/configure-aws-credentials@v2
+#       #   with:
+#       #     aws-region: eu-central-1
+#       #     role-to-assume: arn:aws:iam::676012288735:role/676012288735-github-full-access
 
-      - name: Build Docker containers and push to ECR
-        working-directory: ./training_pipeline
-        run: ./images/build_and_push_all.sh
+#       # - name: Build Docker containers and push to ECR
+#       #   working-directory: ./training_pipeline
+#       #   run: ./images/build_and_push_all.sh
