@@ -380,7 +380,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
 
     # Set model evaluation step
     evaluation_step = ProcessingStep(
-        name="XGBModelEvaluate",
+        name="XGBModelEvaluate2",
         processor=eval_processor,
         inputs=[
             ProcessingInput(
