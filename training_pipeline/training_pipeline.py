@@ -389,7 +389,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
                 destination="/opt/ml/processing/model",
             ),
             ProcessingInput(
-                source='src/personalization/src/utils/', 
+                source='src/personalization/utils/', 
                 destination="/opt/ml/processing/input/code/utils/",
             ),
             ProcessingInput(
