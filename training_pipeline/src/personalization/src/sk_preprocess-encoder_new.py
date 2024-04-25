@@ -148,8 +148,8 @@ if __name__ == "__main__":
     raw_data_positive = "positive.csv"
     raw_data_negative = "negative.csv"
     
-    # s3_client = boto3.client("s3")
-    # bucket_name = "sagemaker-personalization-mlops-poc"
+    s3_client = boto3.client("s3")
+    bucket_name = "sagemaker-personalization-mlops-poc"
     # latest_data = find_latest_training_data(
     #     s3_client,
     #     bucket_name=bucket_name,
