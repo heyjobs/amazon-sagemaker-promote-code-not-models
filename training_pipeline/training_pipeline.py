@@ -445,7 +445,7 @@ def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline
     )
 
     # ======================================================
-    Step 6: Condition for model approval status
+    # Step 6: Condition for model approval status
     # ======================================================
 
     # Evaluate model performance on test set
