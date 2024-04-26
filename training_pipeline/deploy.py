@@ -136,9 +136,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--profile", type=str, default=None, choices=profiles)
-    parser.add_argument("--region", type=str, default="eu-west-3")
+    parser.add_argument("--region", type=str, default="eu-central-1")
     parser.add_argument(
-        "--model-package-name", type=str, default="training-pipelineModelGroup"
+        "--model-package-name", type=str, default="job-personalization-contextual-xgb-group"
     )
     parser.add_argument("--model-version", type=int, default=None)
     args = parser.parse_args()
