@@ -9,321 +9,482 @@ import os
 import argparse
 from datetime import datetime
 
+from aws_profiles import UserProfiles
+
+import pandas as pd
+import json
 import boto3
-from sagemaker.processing import ScriptProcessor
-from sagemaker.pytorch.processing import PyTorchProcessor
-from sagemaker.workflow.steps import ProcessingStep, TrainingStep
-from sagemaker.processing import ProcessingInput, ProcessingOutput
-from sagemaker.workflow.properties import PropertyFile
-from sagemaker.workflow.parameters import ParameterInteger, ParameterFloat
-from sagemaker.model_metrics import MetricsSource, ModelMetrics
+import pathlib
+import io
+import sagemaker
+import time
+
+from sagemaker.model import Model
+from sagemaker.sklearn import SKLearn, SKLearnModel
+from sagemaker.xgboost import XGBoostModel
+from sagemaker import PipelineModel
+
+from sagemaker.deserializers import CSVDeserializer
+from sagemaker.serializers import CSVSerializer
+
+from sagemaker.xgboost.estimator import XGBoost
+from sagemaker.estimator import Estimator
+from sagemaker.sklearn.processing import SKLearnProcessor
+from sagemaker.processing import (
+    ProcessingInput, 
+    ProcessingOutput, 
+    ScriptProcessor
+)
+from sagemaker.inputs import TrainingInput
+
+from sagemaker.workflow.pipeline import Pipeline
+from sagemaker.workflow.model_step import ModelStep
+from sagemaker.workflow.functions import Join
+
+from sagemaker.workflow.steps import (
+    ProcessingStep, 
+    TrainingStep, 
+    CreateModelStep,
+    CacheConfig
+)
+from sagemaker.workflow.check_job_config import CheckJobConfig
+from sagemaker.workflow.parameters import (
+    ParameterInteger, 
+    ParameterFloat, 
+    ParameterString, 
+    ParameterBoolean
+)
+from sagemaker.workflow.clarify_check_step import (
+    ModelBiasCheckConfig, 
+    ClarifyCheckStep, 
+    ModelExplainabilityCheckConfig
+)
+from sagemaker.workflow.step_collections import RegisterModel
 from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
+from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.condition_step import ConditionStep
 from sagemaker.workflow.functions import JsonGet
-from sagemaker.workflow.pipeline import Pipeline
-from sagemaker.inputs import TrainingInput
-from sagemaker.huggingface import HuggingFaceProcessor, HuggingFace
-from sagemaker.huggingface.model import HuggingFaceModel
-from sagemaker.workflow.model_step import ModelStep
-from sagemaker.workflow.pipeline_experiment_config import PipelineExperimentConfig
-from sagemaker.workflow.pipeline_context import PipelineSession
-from sagemaker.workflow.steps import CacheConfig
 
-from aws_profiles import UserProfiles
+from sagemaker.workflow.lambda_step import (
+    LambdaStep,
+    LambdaOutput,
+    LambdaOutputTypeEnum,
+)
+from sagemaker.lambda_helper import Lambda
+
+from sagemaker.model_metrics import (
+    MetricsSource, 
+    ModelMetrics, 
+    FileSource
+)
+from sagemaker.drift_check_baselines import DriftCheckBaselines
+
+from sagemaker.image_uris import retrieve
+
 
 
 def get_pipeline(pipeline_name: str, profile_name: str, region: str) -> Pipeline:
-    session = (
-        boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
-    )
-    sagemaker_session = PipelineSession(boto_session=session)
-    account_id = session.client("sts").get_caller_identity().get("Account")
+    # sess = (
+    #     boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
+    # )
+    # iam = sess.client("iam")
+    
+    sess = sagemaker.Session()
+    
+    # Fetch SageMaker execution role
+    # sagemaker_role = sagemaker.get_execution_role()
+    # account_id = sess.client("sts").get_caller_identity().get("Account")
+    sagemaker_role = "arn:aws:iam::867640704278:role/867640704278-sagemaker-exec"
+    
+    
+    # sagemaker_session = PipelineSession(boto_session=session)
+    # account_id = session.client("sts").get_caller_identity().get("Account")
 
-    iam = session.client("iam")
-    role = iam.get_role(RoleName=f"{account_id}-sagemaker-exec")["Role"]["Arn"]
+    # iam = session.client("iam")
+    # role = iam.get_role(RoleName=f"{account_id}-sagemaker-exec")["Role"]["Arn"]
 
-    default_bucket = sagemaker_session.default_bucket()
+    # default_bucket = sagemaker_session.default_bucket()
 
     # Docker images are located in ECR in 'operations' account
-    operations_id = UserProfiles().get_profile_id("operations")
-    custom_image_uri = (
-        f"{operations_id}.dkr.ecr.{region}.amazonaws.com/training-image:latest"
-    )
+    # operations_id = UserProfiles().get_profile_id("operations")
+    # custom_image_uri = (
+    #     f"{operations_id}.dkr.ecr.{region}.amazonaws.com/training-image:latest"
+    # )
 
-    model_path = f"s3://{default_bucket}/model"
-    data_path = f"s3://{default_bucket}/data"
-    model_package_group_name = f"{pipeline_name}ModelGroup"
-    model_package_group_arn = (
-        f"arn:aws:sagemaker:{region}:{account_id}:"
-        f"model-package/{model_package_group_name}"
-    )
+    # Set names of pipeline objects
+    pipeline_name = "Job-Personalization-Pipeline"
 
-    gpu_instance_type = "ml.g4dn.xlarge"
-    cpu_instance_type = "ml.m5.large"
+    # for xgboost
+    pipeline_model_name = "job-personalization-contextual-xgb"
+    model_package_group_name = "job-personalization-contextual-xgb-group"
+    base_job_name_prefix = "job-personalization"
+    endpoint_config_name = f"{pipeline_model_name}-endpoint-config"
+    endpoint_name = 'job-personalization-model-contextual-xgb'
 
-    pytorch_version = "1.9.0"
-    transformers_version = "4.11.0"
-    py_version = "py38"
-    requirement_dependencies = ["images/train/requirements.txt"]
+    # Set data parameters
+    target_col = "target"
 
-    cache_config = CacheConfig(enable_caching=False, expire_after="30d")
+    # important default training parameters (in sprint format)
+    train_validation_ratio = "0.95"
+    test_day_span = "3"
+    negative_sample_ratio = "2"
+    random_negative_sample_multiplier = "2"
+    include_jobseeker_uid_in_training = "no"
+    include_jdp_view_as_target = "no"
 
-    trial_name = "trial-run-" + datetime.now().strftime("%d-%m-%Y--%H-%M-%S")
-    pipeline_experiment_config = PipelineExperimentConfig(pipeline_name, trial_name)
+
+    # Set instance types and counts
+    process_instance_type = "ml.t3.2xlarge"
+    train_instance_count = 1
+    train_instance_type = "ml.m5.4xlarge"
+
+    # enable caching
+    cache_config = CacheConfig(enable_caching=False, expire_after="PT5H")
+
 
     # ======================================================
     # Define Pipeline Parameters
     # ======================================================
 
-    epoch_count = ParameterInteger(name="epochs", default_value=1)
-    batch_size = ParameterInteger(name="batch_size", default_value=10)
-    learning_rate = ParameterFloat(name="learning_rate", default_value=1e-5)
+    # Set up pipeline input parameters
+
+    # Set timestamp param
+    timestamp_param = ParameterString(
+        name="timestamp", default_value="timestamp"
+    )
+
+    # Set timestamp param
+    bucket_param = ParameterString(
+        name="bucket", default_value="sagemaker-personalization-mlops-poc"
+    )
+
+    # Setup important parameters
+    train_validation_ratio_param = ParameterString(
+        name="train_validation_ratio",
+        default_value=train_validation_ratio,
+    )
+
+    test_day_span_param = ParameterString(
+        name="test_day_span",
+        default_value=test_day_span,
+    )
+
+    negative_sample_ratio_param = ParameterString(
+        name="negative_sample_ratio",
+        default_value=negative_sample_ratio,
+    )
+
+    random_negative_sample_multiplier_param = ParameterString(
+        name="random_negative_sample_multiplier",
+        default_value=random_negative_sample_multiplier,
+    )
+
+    include_jobseeker_uid_in_training_param = ParameterString(
+        name="include_jobseeker_uid_in_training",
+        default_value=include_jobseeker_uid_in_training,
+    )
+
+    include_jdp_view_as_target_param = ParameterString(
+        name="include_jdp_view_as_target",
+        default_value=include_jdp_view_as_target,
+    )
+
+    # Set processing instance type
+    process_instance_type_param = ParameterString(
+        name="ProcessingInstanceType",
+        default_value=process_instance_type,
+    )
+
+    # Set training instance type
+    train_instance_type_param = ParameterString(
+        name="TrainingInstanceType",
+        default_value=train_instance_type,
+    )
+
+    # Set training instance count
+    train_instance_count_param = ParameterInteger(
+        name="TrainingInstanceCount",
+        default_value=train_instance_count
+    )
+
+    # Set model approval param
+    model_approval_status_param = ParameterString(
+        name="ModelApprovalStatus", default_value="Approved"
+    )
+
+    # Set model deployment param
+    model_deployment_param = ParameterString(
+        name="ModelDeploymentlStatus", default_value="no"
+    )
 
     # ======================================================
     # Step 1: Load and preprocess the data
     # ======================================================
 
-    script_preprocess = PyTorchProcessor(
-        framework_version="1.8",
-        instance_type=cpu_instance_type,
-        image_uri=custom_image_uri,
+    # Define the SKLearnProcessor configuration
+    sklearn_processor = SKLearnProcessor(
+        framework_version="1.0-1",
+        role=sagemaker_role,
         instance_count=1,
-        base_job_name="preprocess-script",
-        role=role,
-        sagemaker_session=sagemaker_session,
+        instance_type=process_instance_type,
+        base_job_name=f"{base_job_name_prefix}-processing",
     )
 
-    preprocess_step_args = script_preprocess.run(
+    # Define pipeline processing step
+    process_step = ProcessingStep(
+        name="DataProcessing",
+        processor=sklearn_processor,
         inputs=[
-            ProcessingInput(
-                source=os.path.join(data_path, "train.csv"),
-                destination="/opt/ml/processing/input/train",
-            ),
-            ProcessingInput(
-                source=os.path.join(data_path, "test.csv"),
-                destination="/opt/ml/processing/input/test",
-            ),
-            ProcessingInput(
-                source=os.path.join(data_path, "val.csv"),
-                destination="/opt/ml/processing/input/val",
-            ),
+            ProcessingInput(source='src/personalization/utils/', destination="/opt/ml/processing/input/code/utils/")
         ],
         outputs=[
             ProcessingOutput(
-                output_name="train", source="/opt/ml/processing/output/train"
+                destination=Join(on='/', values=["s3:/", bucket_param, "job-personalization/processing_jobs", timestamp_param, "train_data"]),
+                output_name="train_data",
+                source="/opt/ml/processing/train"
             ),
             ProcessingOutput(
-                output_name="test", source="/opt/ml/processing/output/test"
+                destination=Join(on='/', values=["s3:/", bucket_param, "job-personalization/processing_jobs", timestamp_param, "validation_data"]),
+                output_name="validation_data",
+                source="/opt/ml/processing/val")
+            ,
+            ProcessingOutput(
+                destination=Join(on='/', values=["s3:/", bucket_param, "job-personalization/processing_jobs", timestamp_param, "test_data"]),
+                output_name="test_data",
+                source="/opt/ml/processing/test"
             ),
-            ProcessingOutput(output_name="val", source="/opt/ml/processing/output/val"),
+            ProcessingOutput(
+                destination=Join(on='/', values=["s3:/", bucket_param, "job-personalization/processing_jobs", timestamp_param, "preprocess_pipeline"]),
+                output_name="preprocess_pipeline",
+                source="/opt/ml/processing/preprocess_pipeline"
+            )
         ],
-        code="preprocess.py",
-        source_dir="src",
+        job_arguments=[
+            "--train-validation-ratio", train_validation_ratio_param, 
+            "--test-day-span", test_day_span_param,
+            "--negative-sample-ratio", negative_sample_ratio_param,
+            "--random-negative-sample-multiplier", random_negative_sample_multiplier_param,
+            "--include-jobseeker-uid-in-training", include_jobseeker_uid_in_training_param,
+            "--include-jdp-view-as-target", include_jdp_view_as_target_param
+        ],
+        code="src/personalization/src/sk_preprocess-encoder_new.py",
+        cache_config=cache_config
+    )
+    # ======================================================
+    # Step 2: Train model
+    # ======================================================
+
+    # Retrieve training image
+    xgboost_training_image = retrieve(framework="xgboost", 
+                                    region=region, 
+                                    version="1.7-1",
+                                    image_scope="training")
+
+    # Set XGBoost model hyperparameters 
+    hyperparams = {  
+            "eval_metric" : "auc",
+            "objective": "binary:logistic",
+            "num_round": "250",
+            "max_depth": "15",
+            "subsample": "0.9",
+            "colsample_bytree": "0.9",
+            "eta": "0.1"
+            }
+
+    estimator_output_uri = Join(on='/', values=["s3:/", bucket_param, "job-personalization/training_jobs", timestamp_param])
+
+    xgb_estimator = Estimator(
+        image_uri=xgboost_training_image,
+        instance_type=train_instance_type,
+        instance_count=train_instance_count,
+        output_path=estimator_output_uri,
+        code_location=estimator_output_uri,
+        role=sagemaker_role,
+    )
+    xgb_estimator.set_hyperparameters(**hyperparams)
+
+    # Access the location where the preceding processing step saved train and validation datasets
+    # Pipeline step properties can give access to outputs which can be used in succeeding steps
+    s3_input_train = TrainingInput(
+            s3_data=process_step.properties.ProcessingOutputConfig.Outputs["train_data"].S3Output.S3Uri, 
+            content_type="text/csv"
+        )
+    s3_input_validation = TrainingInput(
+            s3_data=process_step.properties.ProcessingOutputConfig.Outputs["validation_data"].S3Output.S3Uri,
+            content_type="text/csv"
+        )
+
+    # Set pipeline training step
+    train_step = TrainingStep(
+            name="XGBModelTraining",
+            estimator=xgb_estimator,
+            inputs={
+                "train":s3_input_train, # Train channel 
+                "validation": s3_input_validation # Validation channel
+                },
+            cache_config=cache_config
+            )
+
+    # ======================================================
+    # Step 3: Building sklearn pipeline model
+    # ======================================================
+
+    scaler_model = SKLearnModel(
+        name="SKLearnPipelineModelXGB",
+        model_data=Join(on='/', values=["s3:/", bucket_param, "job-personalization/processing_jobs", timestamp_param, "preprocess_pipeline", "preprocess_pipeline.tar.gz"]),
+        role=sagemaker_role,
+        sagemaker_session=sess,
+        source_dir="src/personalization/src/",
+        entry_point="sk_preprocess-encoder_new.py",
+        framework_version="1.0-1",
+    ) 
+
+    scaler_model.env = {"SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT":"text/csv"}
+
+    xgboost_inference_image = retrieve(framework="xgboost", 
+                                    region=region, 
+                                    version="1.7-1",
+                                    image_scope="inference")
+
+    model_artifacts = train_step.properties.ModelArtifacts.S3ModelArtifacts
+
+    xgboost_model =  Model(
+        image_uri=xgboost_inference_image,
+        model_data=model_artifacts,
+        sagemaker_session=sess,
+        role=sagemaker_role,
     )
 
-    step_preprocess = ProcessingStep(
-        name="preprocess-data",
-        step_args=preprocess_step_args,
-        cache_config=cache_config,
+    pipeline_model = PipelineModel(
+        models=[scaler_model, xgboost_model], role=sagemaker_role, sagemaker_session=sess
     )
 
     # ======================================================
-    # Step 2: Train Huggingface model and optionally finetune hyperparameter
+    # Step 4: Evaluate model
     # ======================================================
 
-    estimator = HuggingFace(
-        instance_type=gpu_instance_type,
+    eval_processor = ScriptProcessor(
+        image_uri=xgboost_training_image,
+        command=["python3"],
+        instance_type="ml.m5.xlarge",
         instance_count=1,
-        source_dir="src",
-        entry_point="train.py",
-        sagemaker_session=sagemaker_session,
-        role=role,
-        output_path=model_path,
-        transformers_version=transformers_version,
-        pytorch_version=pytorch_version,
-        py_version=py_version,
-        dependencies=requirement_dependencies,
+        base_job_name=f"{base_job_name_prefix}-model-eval",
+        sagemaker_session=sess,
+        role=sagemaker_role,
     )
-
-    estimator.set_hyperparameters(
-        epoch_count=epoch_count,
-        batch_size=batch_size,
-        learning_rate=learning_rate,
-    )
-
-    step_train = TrainingStep(
-        name="train-model",
-        estimator=estimator,
-        cache_config=cache_config,
-        inputs={
-            "train": TrainingInput(
-                s3_data=step_preprocess.properties.ProcessingOutputConfig.Outputs[
-                    "train"
-                ].S3Output.S3Uri,
-                content_type="text/csv",
-            ),
-            "test": TrainingInput(
-                s3_data=step_preprocess.properties.ProcessingOutputConfig.Outputs[
-                    "test"
-                ].S3Output.S3Uri,
-                content_type="text/csv",
-            ),
-        },
-    )
-
-    # ======================================================
-    # Step 3: Evaluate model
-    # ======================================================
-
-    script_eval = HuggingFaceProcessor(
-        instance_type=gpu_instance_type,
-        image_uri=custom_image_uri,
-        instance_count=1,
-        base_job_name="eval-script",
-        role=role,
-        sagemaker_session=sagemaker_session,
-    )
-
     evaluation_report = PropertyFile(
-        name="EvaluationReport", output_name="evaluation", path="evaluation.json"
+        name="EvaluationReport",
+        output_name="evaluation",
+        path="evaluation.json",
     )
 
-    eval_step_args = script_eval.run(
+    # Set model evaluation step
+    evaluation_step = ProcessingStep(
+        name="XGBModelEvaluate2",
+        processor=eval_processor,
         inputs=[
             ProcessingInput(
-                source=step_preprocess.properties.ProcessingOutputConfig.Outputs[
-                    "val"
-                ].S3Output.S3Uri,
-                destination="/opt/ml/processing/val",
-            ),
-            ProcessingInput(
-                source=step_train.properties.ModelArtifacts.S3ModelArtifacts,
+                # Fetch S3 location where train step saved model artifacts
+                source=train_step.properties.ModelArtifacts.S3ModelArtifacts,
                 destination="/opt/ml/processing/model",
             ),
-        ],
-        outputs=[
-            ProcessingOutput(
-                output_name="evaluation", source="/opt/ml/processing/evaluation"
+            ProcessingInput(
+                source='src/personalization/utils/', 
+                destination="/opt/ml/processing/input/code/utils/",
+            ),
+            ProcessingInput(
+                source=process_step.properties.ProcessingOutputConfig.Outputs["preprocess_pipeline"].S3Output.S3Uri,
+                destination="/opt/ml/processing/preprocess_pipeline",
+            ),
+            ProcessingInput(
+                # Fetch S3 location where processing step saved test data
+                source=process_step.properties.ProcessingOutputConfig.Outputs["test_data"].S3Output.S3Uri,
+                destination="/opt/ml/processing/test",
             ),
         ],
-        code="eval.py",
-        source_dir="src",
-    )
-
-    step_eval = ProcessingStep(
-        name="eval-model",
-        step_args=eval_step_args,
+        outputs=[
+            ProcessingOutput(destination=Join(on='/', values=["s3:/", bucket_param, "job-personalization/model_eval", timestamp_param]),
+                            output_name="evaluation", 
+                            source="/opt/ml/processing/evaluation"),
+        ],
+        job_arguments=[
+            "--include-jobseeker-uid-in-training", include_jobseeker_uid_in_training_param
+        ],
+        code="src/personalization/src/xgboost_evaluate-encoder.py",
         property_files=[evaluation_report],
-        cache_config=cache_config,
+        cache_config=cache_config
     )
 
     # ======================================================
-    # Step 4: Register model
+    # Step 5: Register model
     # ======================================================
-
-    evaluation_s3_uri = "{}/evaluation.json".format(
-        step_eval.arguments["ProcessingOutputConfig"]["Outputs"][0]["S3Output"]["S3Uri"]
-    )
 
     model_metrics = ModelMetrics(
         model_statistics=MetricsSource(
-            s3_uri=evaluation_s3_uri,
+            s3_uri=Join(on='/', values=["s3:/", bucket_param, "job-personalization/model_eval", timestamp_param, "evaluation.json"]),
             content_type="application/json",
         )
     )
 
-    model = HuggingFaceModel(
-        name="text-classification-model",
-        model_data=step_train.properties.ModelArtifacts.S3ModelArtifacts,
-        sagemaker_session=sagemaker_session,
-        source_dir="src",
-        entry_point="model.py",
-        dependencies=requirement_dependencies,
-        role=role,
-        transformers_version=transformers_version,
-        pytorch_version=pytorch_version,
-        py_version=py_version,
-    )
-
-    step_register = ModelStep(
-        name="register-model",
-        step_args=model.register(
-            content_types=["text/csv"],
-            response_types=["text/csv"],
-            inference_instances=[gpu_instance_type, "ml.m5.large"],
-            transform_instances=[gpu_instance_type, "ml.m5.large"],
-            model_package_group_name=model_package_group_name,
-            model_metrics=model_metrics,
-        ),
-    )
-
-    # ======================================================
-    # Step 5: Approve model
-    # ======================================================
-
-    script_approve = ScriptProcessor(
-        command=["python3"],
-        image_uri=custom_image_uri,
-        instance_type=cpu_instance_type,
-        instance_count=1,
-        base_job_name="script-approve",
-        role=role,
-        env={
-            "model_package_version": step_register.properties.ModelPackageVersion.to_string(),
-            "model_package_group_arn": model_package_group_arn,
-        },
-        sagemaker_session=sagemaker_session,
-    )
-
-    step_approve = ProcessingStep(
-        name="approve-model",
-        step_args=script_approve.run(
-            code="src/approve.py",
-        ),
+    register_step = RegisterModel(
+        name="XGBRegisterModel",
+        model=pipeline_model,
+        content_types=["text/csv"],
+        response_types=["text/csv"],
+        inference_instances=["ml.m5.large"],
+        model_metrics=model_metrics,
+        model_package_group_name=model_package_group_name,
+        approval_status=model_approval_status_param,
     )
 
     # ======================================================
     # Step 6: Condition for model approval status
     # ======================================================
 
+    # Evaluate model performance on test set
     cond_gte = ConditionGreaterThanOrEqualTo(
         left=JsonGet(
-            step_name=step_eval.name,
+            step_name=evaluation_step.name,
             property_file=evaluation_report,
-            json_path="metrics.accuracy.value",
+            json_path="classification_metrics.roc_auc.value",
         ),
-        right=0.1,
+        right=0.6, # Threshold to compare model performance against
     )
 
-    step_cond = ConditionStep(
-        name="accuracy-check",
+    condition_step = ConditionStep(
+        name="CheckPersonalizationModelXGBEvaluation",
         conditions=[cond_gte],
-        if_steps=[step_approve],
-        else_steps=[],
+        if_steps=[register_step], 
+        else_steps=[]
     )
 
     # ======================================================
     # Final Step: Define Pipeline
     # ======================================================
 
+    # Create the Pipeline with all component steps and parameters
     pipeline = Pipeline(
         name=pipeline_name,
-        parameters=[
-            epoch_count,
-            batch_size,
-            learning_rate,
-        ],
+        parameters=[timestamp_param,
+                    bucket_param,
+                    process_instance_type_param, 
+                    train_instance_type_param, 
+                    train_instance_count_param, 
+                    model_approval_status_param,
+                    train_validation_ratio_param,
+                    test_day_span_param,
+                    negative_sample_ratio_param,
+                    random_negative_sample_multiplier_param,
+                    include_jobseeker_uid_in_training_param,
+                    include_jdp_view_as_target_param],
         steps=[
-            step_preprocess,
-            step_train,
-            step_register,
-            step_eval,
-            step_cond,
+            process_step,
+            train_step,
+            evaluation_step,
+            condition_step
         ],
-        sagemaker_session=sagemaker_session,
-        pipeline_experiment_config=pipeline_experiment_config,
+        sagemaker_session=sess
     )
-
     return pipeline
 
 
@@ -357,8 +518,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", type=str, default=None, choices=profiles)
-    parser.add_argument("--region", type=str, default="eu-west-3")
-    parser.add_argument("--pipeline-name", type=str, default="training-pipeline")
+    parser.add_argument("--region", type=str, default="eu-central-1")
+    parser.add_argument("--pipeline-name", type=str, default="Job-Personalization-Pipeline")
     parser.add_argument("--action", type=str, choices=["create", "run"])
     args = parser.parse_args()
 

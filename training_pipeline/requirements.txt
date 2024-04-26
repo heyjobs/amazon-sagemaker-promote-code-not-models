@@ -1,4 +1,1 @@
-sagemaker==2.131.0
-ipykernel==6.16.2
-matplotlib==3.5.3
-seaborn==0.12.2
+sagemaker

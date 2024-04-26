@@ -1,9 +1,8 @@
 name: Deploy to [staging/prod]
 on:
   push:
-    tags:
-      - staging
-      - prod
+    branches:
+      - '*'
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -12,20 +11,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python 3.7
+      - name: Set up Python 3.9
         uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.9
 
       - name: Install dependencies
         run: pip install -r ./training_pipeline/requirements.txt
 
       - name: Login to [staging] account
-        if: startsWith(github.ref, 'refs/tags/staging')
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-region: eu-west-3
-          role-to-assume: arn:aws:iam::381667332649:role/381667332649-github-full-access
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::867640704278:role/867640704278-github-full-access
 
      # - name: Login to [prod] account
       #  if: startsWith(github.ref, 'refs/tags/prod')
@@ -43,15 +41,14 @@ jobs:
           #terraform workspace select "$ENV_NAME"
           #terraform apply -auto-approve --var-file environment/"$ENV_NAME".tfvars
 
-      - name: Upload training data to S3 bucket
-        working-directory: ./training_pipeline
-        run: python upload_dataset.py
+      # - name: Upload training data to S3 bucket
+      #   working-directory: ./training_pipeline
+      #   run: python upload_dataset.py
 
       - name: Create training pipeline
         working-directory: ./training_pipeline
         run: python training_pipeline.py --action create
 
-      #- name: Run training pipeline (only in prod)
-       # if: startsWith(github.ref, 'refs/tags/prod')
-       # working-directory: ./training_pipeline
-       #  run: python training_pipeline.py --action run
+      - name: Run training pipeline (only in prod)
+        working-directory: ./training_pipeline
+        run: python training_pipeline.py --action run

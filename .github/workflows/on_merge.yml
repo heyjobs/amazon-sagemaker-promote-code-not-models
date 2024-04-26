@@ -2,7 +2,7 @@ name: Staging build pipeline
 on:
   push:
     branches:
-      - main
+      - '*'
   pull_request:
 jobs:
   build-staging:
@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python 3.7
         uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.9
 
       - name: Install dependencies
         run: pip install -r ./training_pipeline/requirements.txt
