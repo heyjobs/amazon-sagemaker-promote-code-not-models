@@ -57,7 +57,7 @@ def deploy(
         model_package_arn=model_package_arn,
         sagemaker_session=sagemaker_session,
     )
-    instance_type = "ml.g4dn.xlarge"
+    instance_type = "ml.m5.xlarge"
 
     try:
         print("Start model deployment")
