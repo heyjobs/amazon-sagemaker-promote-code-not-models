@@ -9,7 +9,7 @@ echo "Profile-Name: operations"
 docker build -t lambda-image -f images/lambda/Dockerfile .
 
 # Login to docker registry
-aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin $operations.dkr.ecr.eu-central-1.amazonaws.com 
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin $operations.dkr.ecr.eu-central-1.amazonaws.com 
 
 # Tag and Push Docker Image to Container Registry
 docker tag lambda-image:latest $operations.dkr.ecr.eu-central-1.amazonaws.com/lambda-image:latest
