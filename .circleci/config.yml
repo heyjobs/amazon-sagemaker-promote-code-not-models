@@ -24,8 +24,8 @@ jobs:
             aws configure set region eu-central-1
             #aws sts assume-role --role-arn arn:aws:iam::676012288735:role/sagemaker-mlops-lambda-oidc-deployment-role --role-session-name CircleCIActionsSession
             aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 676012288735.dkr.ecr.eu-central-1.amazonaws.com
-       - setup_remote_docker:
-           docker_layer_caching: true
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: Build Docker containers and push to ECR
           working_directory: ./training_pipeline
