@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  aws-cli: circleci/aws-cli@0.1.12
+
 jobs:
   build-staging:
     docker:
