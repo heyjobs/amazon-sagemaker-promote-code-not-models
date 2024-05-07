@@ -12,5 +12,5 @@ docker build -t lambda-image -f images/lambda/Dockerfile .
 aws ecr get-login-password --region eu-west-3 | docker login --username AWS --password-stdin $operations.dkr.ecr.eu-central-1.amazonaws.com 
 
 # Tag and Push Docker Image to Container Registry
-docker tag lambda-image:latest $operations.dkr.ecr.eu-central-1.amazonaws.com/lambda-image:latest
-docker push $operations.dkr.ecr.eu-central-1.amazonaws.com/lambda-image:latest
+docker tag lambda-image:latest $operations.dkr.ecr.eu-central-1.amazonaws.com/sagemaker-mlops-lambda-image:latest
+docker push $operations.dkr.ecr.eu-central-1.amazonaws.com/sagemaker-mlops-lambda-image:latest
