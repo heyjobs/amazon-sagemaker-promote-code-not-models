@@ -21,14 +21,13 @@ jobs:
             aws configure set region eu-central-1
             aws sts assume-role --role-arn arn:aws:iam::676012288735:role/sagemaker-mlops-lambda-oidc-deployment-role --role-session-name CircleCIActionsSession
             aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 676012288735.dkr.ecr.eu-central-1.amazonaws.com
-      - setup-ecr
+      #- setup-ecr
       - run:
           name: Build Docker containers and push to ECR
           working_directory: ./training_pipeline
           command: |
             ./images/build_and_push_all.sh
-  setup-ecr:
-    description: Setup docker for ECR
-    steps:
-      - run: eval $(aws ecr get-login --region eu-central-1 --no-include-email)
-      
+  #setup-ecr:
+  #  description: Setup docker for ECR
+  #  steps:
+  #    - run: eval $(aws ecr get-login --region eu-central-1 --no-include-email)
